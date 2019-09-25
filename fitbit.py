@@ -9,6 +9,8 @@ import math
 from typing import NamedTuple
 import csv
 from scipy import stats
+from collections import defaultdict
+import numpy as np
 
 #Class for Fitbit sleep event
 class SleepEvent(NamedTuple):
@@ -16,6 +18,13 @@ class SleepEvent(NamedTuple):
     hours_asleep: float
     start_time: datetime.datetime
     stop_time: datetime.datetime
+
+#Class for Fitbit activity event
+class ActivityDay(NamedTuple):
+    date: datetime.date
+    steps: int
+    distance: float
+    stairs: float
 
 #Class for day weather
 class DayWeather(NamedTuple):
@@ -43,6 +52,26 @@ while date1<=date2:
     date1 += datetime.timedelta(days=1)
 for x in mydates: print(x)'''
 
+#Get steps data from Fitbit directory
+step_dict: Dict[str, int] = defaultdict(int)
+for file in os.listdir(fitbit_directory):
+    filename = os.fsdecode(file)
+    log_name = "steps"
+    if log_name in filename:
+        filename_with_directory = f"{fitbit_directory_name}/{filename}"
+        with open(filename_with_directory,"r") as f:
+            data = f.read()
+            obj = json.loads(data)
+            for step_event in obj:
+                steps = int(step_event["value"]) #get steps for each step_event
+                string_datetimez = step_event["dateTime"] #get datetime for each step_event
+                datetimez = datetime.datetime.strptime(string_datetimez,'%m/%d/%y %H:%M:%S') #Convert to datetime format
+                datez = datetimez.strftime('%Y-%m-%d')
+                step_dict[datez] += steps
+
+#print(activity_dict.items())
+
+
 #Get sleep data from Fitbit directory
 sleep_list = []
 for file in os.listdir(fitbit_directory):
@@ -66,25 +95,6 @@ for file in os.listdir(fitbit_directory):
 
 sleep_list.sort()
 
-#Compare sleep duration and start time
-'''plt.scatter(start_list, h_list, alpha=0.2)
-plt.scatter(stop_list, h_list, alpha=0.2, c='red')
-for start, stop, duration in zip(start_list, stop_list, h_list):
-    plt.plot([start,stop],[duration,duration],'k-')
-
-plt.title("Hours Asleep vs. Start time")
-plt.xlabel("start time")
-plt.ylabel("Hours asleep")
-ax = plt.gcf().axes[0]
-ax.grid(True)
-plt.show()
-plt.gca().clear()
-plt.close()'''
-
-#max_sleep = max(event.hours_asleep
-#            for event in sleep_list)
-#print(f"Max sleep is {max_sleep} hours")
-
 
 corrected_date_list = []
 corrected_hours_list = []
@@ -93,43 +103,68 @@ stop_time_list = []
 previous_date = datetime.date(2000, 8, 30)  #random date in the far past
 
 #Exlcude dates when I was not in Seattle
-#exclusion dates is a list of dates in the format
-#exclusion_dates = [[datetime.date(2016, 12, 20), datetime.date(2017, 1, 4)],...
-from vacation_dates import exclusion_dates
+#travel_dates is a list of dates in the format
+#travel_dates = [[datetime.date(2016, 12, 20), datetime.date(2017, 1, 4)],...
+from vacation_dates import travel_dates
 
 previous_log_id = 0
+default_datetime = datetime.datetime(2000, 1, 1, 0, 0, 0);
 
 for event in sleep_list:
+    #Get start hour of sleep event
     start_hour = event.start_time.hour
+    #Shift date to prior day for start times after midnight til 11am
     if start_hour<11:
-        shift = 0
-        date = event.start_time.date() - datetime.timedelta(days=1)  #shift date to day before for start times after midnight til 11am
+        date = event.start_time.date() - datetime.timedelta(days=1)
+        #shift = 0
+        shift = datetime.timedelta(hours=0)
+    #But don't shift date when sleep starts after 11am and before midnight
     else:
-        date = event.start_time.date() #don't shift date when sleep starts after 11am and before midnight
-        shift = -24
-    good_date = True
-    for date_range in exclusion_dates:
+        date = event.start_time.date()
+        #shift = -24
+        shift = datetime.timedelta(hours=-24)
+    seattle_date = True
+    #Exlude days when not in Seattle
+    for date_range in travel_dates:
         start_date, stop_date = date_range
         if start_date <= date <= stop_date:
-            good_date = False
+            seattle_date = False
             break
-    if good_date:
-        if previous_log_id==event.log_id:  #Remove any duplicate sleep logs (at beginning/end of files)
+    if seattle_date:
+        start = event.start_time
+        stop = event.stop_time
+        #Remove any duplicate sleep logs (at beginning/end of files)
+        if previous_log_id==event.log_id:
             continue
         #Remove naps
-        elif 12<=event.start_time.hour<20 and event.stop_time.hour<20:
+        elif 12<=start.hour<20 and stop.hour<20:
             continue
         #Combine sleep records for events with same dates
         elif previous_date==date:
             corrected_hours_list[-1] += event.hours_asleep
-            stop_time_list[-1] = event.stop_time.hour+event.stop_time.minute*1/60
+            #stop_time_list[-1] = event.stop_time.hour+stop.minute*1/60
+            stop_timedelta = datetime.timedelta(hours=stop.hour,minutes=stop.minute,seconds=stop.second)
+            stop_time_list[-1] = default_datetime + stop_timedelta
+        #Save sleep record
         else:
             corrected_date_list.append(date)
             corrected_hours_list.append(event.hours_asleep)
-            start_time_list.append(event.start_time.hour+shift+event.start_time.minute*1/60)
-            stop_time_list.append(event.stop_time.hour+event.stop_time.minute*1/60)
+            #start_time_list.append(start.hour+shift+start.minute*1/60)
+            #stop_time_list.append(stop.hour+stop.minute*1/60)
+            start_timedelta = datetime.timedelta(hours=start.hour,minutes=start.minute,seconds=start.second)
+            start_time_list.append(default_datetime + start_timedelta + shift)
+            stop_timedelta = datetime.timedelta(hours=stop.hour,minutes=stop.minute,seconds=stop.second)
+            stop_time_list.append(default_datetime + stop_timedelta)
         previous_date = date
         previous_log_id = event.log_id
+
+steps_list = []
+for datez in corrected_date_list:
+    string_datez = datez.strftime('%Y-%m-%d')
+    steps = step_dict[string_datez]
+    steps_list.append(steps)
+
+
 
 plt.plot(corrected_date_list, corrected_hours_list)
 ax = plt.gcf().axes[0]
@@ -204,61 +239,57 @@ for date in corrected_date_list:
             temp_min_list.append(day.temp_min)
 #print(date)
 
-print("Max temperature correlation is " + str(stats.pearsonr(temp_max_list, corrected_hours_list)))
-print("Min temperature correlation is " + str(stats.pearsonr(temp_min_list, corrected_hours_list)))
+#print("Max temperature correlation is " + str(stats.pearsonr(temp_max_list, corrected_hours_list)))
+#print("Min temperature correlation is " + str(stats.pearsonr(temp_min_list, corrected_hours_list)))
 
-plt.scatter(temp_max_list, corrected_hours_list, alpha=0.2)
-plt.title("Hours Asleep vs. Max Temperature")
-plt.xlabel("Max temperature")
-plt.ylabel("Hours asleep")
-ax = plt.gcf().axes[0]
-ax.grid(True)
-plt.show()
-plt.gca().clear()
-plt.close()
-
-plt.scatter(temp_min_list, corrected_hours_list, alpha=0.2)
-plt.title("Hours Asleep vs. Min Temperature")
-plt.xlabel("Min temperature")
-plt.ylabel("Hours asleep")
-ax = plt.gcf().axes[0]
-ax.grid(True)
-plt.show()
-plt.gca().clear()
-plt.close()
-
-print("start time correlation is " + str(stats.pearsonr(start_time_list, corrected_hours_list)))
-print("stop time correlation is " + str(stats.pearsonr(stop_time_list, corrected_hours_list)))
+#print("start time correlation is " + str(stats.pearsonr(start_time_list, corrected_hours_list)))
+#print("stop time correlation is " + str(stats.pearsonr(stop_time_list, corrected_hours_list)))
 
 #Compare sleep duration and start time
-plt.scatter(start_time_list, corrected_hours_list, alpha=0.2)
-# label each point
-'''for time, hours, date in zip(start_time_list, corrected_hours_list, corrected_date_list):
-    plt.annotate(date,
+def plot_nice(list1,list2,title,label1,label2):
+    plt.plot(list1, list2, 'o', alpha=0.2, label='data')
+    # label each point
+    '''for time, hours, date in zip(start_time_list, corrected_hours_list, corrected_date_list):
+        plt.annotate(date,
                  xy=(time, hours), # Put the label with its point
                  xytext=(5, -5),                  # but slightly offset
                  textcoords='offset points',
                  size=5)'''
-plt.title("Hours Asleep vs. Start time")
-plt.xlabel("Time relative to midnight (hours)")
-plt.ylabel("Hours asleep")
-ax = plt.gcf().axes[0]
-ax.grid(True)
-plt.show()
-plt.gca().clear()
-plt.close()
+    plt.title(title)
+    plt.xlabel(label1)
+    plt.ylabel(label2)
+    
+    x = np.asarray(list1)
+    y = np.asarray(list2)
 
-#Compare sleep duration and stop time
-plt.scatter(stop_time_list, corrected_hours_list, alpha=0.2, c='red')
-plt.title("Hours Asleep vs. Stop time")
-plt.xlabel("Time relative to midnight (hours)")
-plt.ylabel("Hours asleep")
-ax = plt.gcf().axes[0]
-ax.grid(True)
-plt.show()
-plt.gca().clear()
-plt.close()
+    if isinstance(list1[0],datetime.datetime): #For time on x-axis (see Ref #1)
+        x = dates.date2num(list1)
+        plt.gcf().autofmt_xdate()
+        myFmt = dates.DateFormatter('%H:%M')
+        plt.gca().xaxis.set_major_formatter(myFmt)
+    if isinstance(list2[0],datetime.datetime): #For time on y-axis
+        y = dates.date2num(list2)
+        myFmt = dates.DateFormatter('%H:%M')
+        plt.gca().yaxis.set_major_formatter(myFmt)
 
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x, y)
+    #print("slope: %f    intercept: %f" % (slope, intercept))
+    print(f"R-squared: {r_value**2} for {title}")
+    plt.plot(x, intercept + slope*x, 'r', label='linear fit')
+    plt.legend()
+    
+    ax = plt.gcf().axes[0]
+    ax.grid(True)
+    plt.show()
+    plt.gca().clear()
+    plt.close()
+
+plot_nice(steps_list,corrected_hours_list,"Sleep duration vs. Steps","Steps","Sleep duration (hours)")
+plot_nice(temp_max_list,corrected_hours_list,"Sleep duration vs. Max temperature","Max temperature ($^\circ$F)","Sleep duration (hours)")
+#plot_nice(temp_min_list,corrected_hours_list,"Sleep duration vs. Min temperature","Min temperature ($^\circ$F)","Sleep duration (hours)")
+#plot_nice(start_time_list,corrected_hours_list,"Sleep duration vs. Start time","Sleep start time","Sleep duration (hours)")
+#plot_nice(stop_time_list,corrected_hours_list,"Sleep duration vs. Stop time","Sleep stop time","Sleep duration (hours)")
+#plot_nice(start_time_list,stop_time_list,"Stop time vs. Start time","Sleep start time","Sleep stop time")
 
 #Checking SleepEvent class
 ev = SleepEvent(5, 7.5, datetime.datetime(2018, 12, 14, 12, 4, 30), datetime.datetime(2018, 12, 14, 12, 5, 30))
@@ -279,3 +310,7 @@ day_weather = DayWeather(datetime.date(2018, 12, 14), 75, 40)
 assert day.date == datetime.date(2018, 12, 14)
 assert day.temp_max == 75
 assert day.temp_min == 40
+
+'''
+Ref #1 = https://stackoverflow.com/questions/1574088/plotting-time-in-python-with-matplotlib/16428019#16428019
+'''
