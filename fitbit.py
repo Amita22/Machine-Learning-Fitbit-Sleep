@@ -1,17 +1,24 @@
-import os
-import json
-from matplotlib import pyplot as plt
-import matplotlib.dates as dates
-import datetime
-from typing import List, Dict, Any
-from collections import Counter
-import math
-from typing import NamedTuple
+'''
+fitbit.py
+Created by Luke Kippenbrock, last edited on 11 Oct 2019
+Look for correlations between fitbit sleep duration and other fitbit parameters
+'''
+
+%matplotlib inline
+
+from collections import Counter, defaultdict
 import csv
-from scipy import stats
-from collections import defaultdict
+import datetime
+import json
+import math
+import matplotlib.pyplot as plt
+import matplotlib.dates as dates
 import numpy as np
+import os
+from scipy import stats
 import statistics
+from typing import Any, Dict, List, NamedTuple 
+
 
 #Class for Fitbit sleep event
 class SleepEvent(NamedTuple):
@@ -59,15 +66,15 @@ def process_fitbit_data(log_name: str) -> Dict[str, float]:
                 obj = json.loads(data)
                 for value_event in obj:
                     value = float(value_event["value"]) #get value for each value_event
-                    string_datetimez = value_event["dateTime"] #get datetime for each value_event
-                    datetimez = datetime.datetime.strptime(string_datetimez,'%m/%d/%y %H:%M:%S') #Convert to datetime format
+                    string_dt = value_event["dateTime"] #get datetime for each value_event
+                    dt = datetime.datetime.strptime(string_dt,'%m/%d/%y %H:%M:%S') #Convert to datetime format
                     #Steps and distance in file are dated according to GMT, which is 7 hours ahead of Seattle, so a shift is necessary
                     if log_name=="steps":
-                        datetimez += datetime.timedelta(hours=-7)
+                        dt += datetime.timedelta(hours=-7)
                     if log_name=="distance":
-                        datetimez += datetime.timedelta(hours=-7)
-                    datez = datetimez.strftime('%Y-%m-%d')
-                    value_dict[datez] += value
+                        dt += datetime.timedelta(hours=-7)
+                    string_date = dt.strftime('%Y-%m-%d')
+                    value_dict[string_date] += value
     #Save data to file
     json_dict = json.dumps(value_dict)
     with open(f"Processed_Data/{log_name}.json","w") as f:
@@ -87,10 +94,10 @@ def process_heart_rate_data(zone_name: str) -> Dict[str, float]:
                 obj = json.loads(data)
                 for value_event in obj:
                     value = float(value_event["value"]["valuesInZones"][zone_name]) #get value for each value_event
-                    string_datetimez = value_event["dateTime"] #get datetime for each value_event
-                    datetimez = datetime.datetime.strptime(string_datetimez,'%m/%d/%y %H:%M:%S') #Convert to datetime format
-                    datez = datetimez.strftime('%Y-%m-%d')
-                    value_dict[datez] += value
+                    string_dt = value_event["dateTime"] #get datetime for each value_event
+                    dt = datetime.datetime.strptime(string_dt,'%m/%d/%y %H:%M:%S') #Convert to datetime format
+                    d = dt.strftime('%Y-%m-%d')
+                    value_dict[d] += value
     #Save data to file
     json_dict = json.dumps(value_dict)
     with open(f"Processed_Data/{zone_name}.json","w") as f:
@@ -103,6 +110,7 @@ def get_processed_data(filename: str) -> Dict[str, float]:
         dict = json.load(json_file)
         value_dict = defaultdict(float,dict)
     return value_dict
+
 
 heart_below_one_dict: Dict[str, float] = process_heart_rate_data("BELOW_DEFAULT_ZONE_1")
 heart_zone_one_dict: Dict[str, float] = process_heart_rate_data("IN_DEFAULT_ZONE_1")
@@ -230,8 +238,8 @@ previous_day_sleep_list = []
 current_day_sleep_list = []
 weekday_list = []
 month_list = []
-for datez in date_list:
-    string_date = datez.strftime('%Y-%m-%d')
+for d in date_list:
+    string_date = d.strftime('%Y-%m-%d')
     #Heart below 1 hours
     heart_below_one_hours = heart_below_one_dict[string_date]/60 #Convert from minutes to hours
     heart_below_one_list.append(heart_below_one_hours)
@@ -270,23 +278,23 @@ for datez in date_list:
     miles = distance*6.21371e-6  #Convert from centimeters to miles
     distance_list.append(miles)
     #Previous day's sleep
-    previous_date = datez - datetime.timedelta(days=1)
+    previous_date = d - datetime.timedelta(days=1)
     previous_date_string = previous_date.strftime('%Y-%m-%d')
     previous_day_sleep = sleep_dict[previous_date_string]
-    current_date_string = datez.strftime('%Y-%m-%d')
+    current_date_string = d.strftime('%Y-%m-%d')
     current_day_sleep = sleep_dict[current_date_string]
     if previous_day_sleep: #Remove days with no sleep record for previous day
         previous_day_sleep_list.append(previous_day_sleep)
         current_day_sleep_list.append(current_day_sleep)
     #Weekday
-    weekday = datez.weekday()
+    weekday = d.weekday()
     weekday_list.append(weekday)
     #Month
-    month = datez.month
+    month = d.month
     month_list.append(month)
-    #print(f"{string_datez} {calories}")
+    #print(f"{string_d} {calories}")
     #if distance==0:
-    #    print(string_datez)
+    #    print(string_d)
 
 #for a,b in zip(date_list, calories_list):
 #    print(a, b)
@@ -379,7 +387,7 @@ def plot_variable_histogram(sleep_list: List[float], variable_list: List[float],
         plt.xticks(ind, ('Jan', 'Feb', 'Mar', 'Apr', 'May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'))
         plt.show()
         plt.close()
-        
+
 plot_variable_histogram(sleep_list, weekday_list, "weekday")
 plot_variable_histogram(sleep_list, month_list, "month")
 
