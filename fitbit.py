@@ -4,8 +4,6 @@ Created by Luke Kippenbrock, last edited on 11 Oct 2019
 Look for correlations between fitbit sleep duration and other fitbit parameters
 '''
 
-%matplotlib inline
-
 from collections import Counter, defaultdict
 import csv
 import datetime

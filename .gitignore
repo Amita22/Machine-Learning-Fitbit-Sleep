@@ -1,0 +1,7 @@
+.DS_Store
+.ipynb_checkpoints/
+LukeKippenbrock/*
+Processed_Data/*
+SeattleWeather.csv
+__pycache__/*
+vacation_dates.py
