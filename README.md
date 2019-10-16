@@ -1,6 +1,7 @@
 # Fitbit sleep duration analysis
 
-Look for correlations between sleep duration recorded by my fitbit and other parameters (e.g. weather, exercise)
+Analyzes my own fitbit sleep data and creates a linear regression model to
+study which fitbit parameters (physical activity, daily temperature) most affect sleep duration
 
 Files or directories required for code to run:
 - LukeKippenbrock/user-site-export: Directory with all my data (JSON format) exported from fitbit website
