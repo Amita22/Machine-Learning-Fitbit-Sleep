@@ -1,4 +1,4 @@
-# Fitbit sleep duration analysis
+# Machine learning analysis of Fitbit sleep data
 
 Analyzes my own fitbit sleep data and creates a linear regression model to study which fitbit parameters (physical activity, daily temperature) most affect sleep duration.  The end result can be used to recommend changes to my behavior so that I get the most amount of sleep.
 
